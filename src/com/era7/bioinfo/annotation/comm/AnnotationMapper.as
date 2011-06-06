@@ -41,7 +41,7 @@ package com.era7.bioinfo.annotation.comm
 			parameters.addParametersContent(<url>{urlValue}</url>);
 			request.setParameters(parameters);
 			
-			
+			mainManager.loadRequest(request,serverCallable,UrlManager.LOAD_ANNOTATION_FILE_FILE_FROM_URL);
 			
 		}		
 		
