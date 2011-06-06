@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow 
+				xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="700" height="675"
+			   close="titlewindow1_closeHandler(event)"
+			   paddingLeft="10" paddingRight="10" paddingTop="10" paddingBottom="10"
+			   showCloseButton="true"   headerHeight="15">
+	<mx:states>
+		<s:State name="State1"/>
+		<s:State name="NoButtonState"/>
+	</mx:states>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.era7.bioinfo.annotation.event.PredictedGeneWindowEvent;
+			import com.era7.bioinfo.xml.annotation.PredictedGene;
+			
+			import flash.net.navigateToURL;
+			
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			protected var gene:PredictedGene = null;
+			
+			protected var frameshiftsWindow:FrameshiftsTitleWindow = null;
+			protected var extraStopCodonsWindow:ExtraStopCodonsTitleWindow = null;
+			
+			
+			public static const UNIPROT_URL:String = "http://www.uniprot.org/uniprot/";
+			public static const NO_BUTTONS_STATE:String = "NoButtonState";
+			
+			
+			public function setGene(value:PredictedGene):void{
+				gene = value;
+				
+				if(gene.getContent().frameshifts[0] != null){
+					frameshiftsButton.enabled = true;
+					frameshiftsButton.label = "browse";
+				}else{
+					frameshiftsButton.enabled = false;
+					frameshiftsButton.label = "-";
+				}
+				
+				if(gene.getContent().extra_stop_codons[0] != null){
+					stopCodonsButton.enabled = true;
+					stopCodonsButton.label = "browse";
+				}else{
+					stopCodonsButton.enabled = false;
+					stopCodonsButton.label = "-";
+				}
+			}
+			
+
+			protected function titlewindow1_closeHandler(event:CloseEvent):void
+			{
+				this.visible = false;
+			}
+
+
+			protected function annotationUniprotIdLabel_clickHandler(event:MouseEvent):void
+			{
+				navigateToURL(new URLRequest(UNIPROT_URL+annotationUniprotIdLabel.text));
+			}
+
+
+			protected function frameshiftsButton_clickHandler(event:MouseEvent):void
+			{
+				if(frameshiftsWindow == null){
+					frameshiftsWindow = FrameshiftsTitleWindow(PopUpManager.createPopUp(this,FrameshiftsTitleWindow));
+					PopUpManager.centerPopUp(frameshiftsWindow);
+				}
+
+				frameshiftsWindow.xml = gene.getContent().frameshifts[0];
+				frameshiftsWindow.visible = true;
+				PopUpManager.bringToFront(frameshiftsWindow);
+			}
+
+
+			protected function stopCodonsButton_clickHandler(event:MouseEvent):void
+			{
+				if(extraStopCodonsWindow == null){
+					extraStopCodonsWindow = ExtraStopCodonsTitleWindow(PopUpManager.createPopUp(this,ExtraStopCodonsTitleWindow));
+					PopUpManager.centerPopUp(extraStopCodonsWindow);
+				}
+				
+				extraStopCodonsWindow.xml = gene.getContent().extra_stop_codons[0];
+				extraStopCodonsWindow.visible = true;
+				PopUpManager.bringToFront(extraStopCodonsWindow);
+			}
+
+
+			protected function nextButton_clickHandler(event:MouseEvent):void
+			{
+				dispatchEvent(new PredictedGeneWindowEvent(PredictedGeneWindowEvent.GO_TO_NEXT_GENE,true));
+			}
+
+
+			protected function previousButton_clickHandler(event:MouseEvent):void
+			{
+				dispatchEvent(new PredictedGeneWindowEvent(PredictedGeneWindowEvent.GO_TO_PREVIOUS_GENE,true));
+			}
+
+		]]>
+	</fx:Script>	
+	<s:HGroup width="100%" verticalAlign="middle" includeIn="State1">
+		<s:Button label="&lt;&lt; previous" id="previousButton" click="previousButton_clickHandler(event)" toolTip="Navigate to the previous gene on this contig"/>
+		<mx:Spacer width="100%"/>
+		<s:Button label="next &gt;&gt;" id="nextButton" click="nextButton_clickHandler(event)" toolTip="Navigate to the next gene on this contig"/>		
+	</s:HGroup>
+	<mx:VBox width="100%" height="100%" backgroundColor="#FBFCE5" 
+			 paddingLeft="10" paddingRight="10" paddingTop="10" paddingBottom="10">
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Era7 gene ID:" fontWeight="bold"/>
+			<mx:Label id="idLabel" text="{gene.id}" selectable="true"/>
+			<mx:Spacer width="100%"/>
+			<s:Label text="Status:" fontWeight="bold"/>
+			<mx:Label id="statusLabel" text="{gene.status}"/>		
+			<s:Label includeIn="NoButtonState" text="Gene dismissed by:" fontWeight="bold"/>
+			<mx:Label includeIn="NoButtonState" text="{gene.geneDismissedBy}" 
+					  id="geneDismissedByLabel" selectable="true"/>
+		</s:HGroup>	
+		<s:VGroup width="100%">
+			<s:Label text="Protein name:" fontWeight="bold"/>
+			<s:TextArea height="40" width="100%" id="proteinNamesTextArea" 
+						text="{gene.proteinNames}" editable="false"/>
+		</s:VGroup>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Start:" fontWeight="bold"/>
+			<mx:Label id="startLabel" text="{gene.startPosition}" selectable="true"/>
+			<s:Label text="End:" fontWeight="bold"/>
+			<mx:Label text="{gene.endPosition}" id="endLabel" selectable="true"/>
+		</s:HGroup>	
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Start is canonical:" fontWeight="bold"/>
+			<mx:Label id="startIsCanonicalLabel" text="{gene.startIsCanonical}" selectable="true"/>
+			<s:Label text="End is canonical:" fontWeight="bold"/>
+			<mx:Label text="{gene.endIsCanonical}" id="endLabel0" selectable="true"/>
+		</s:HGroup>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Strand:" fontWeight="bold"/>
+			<mx:Label text="{gene.strand}" selectable="true"/>
+			<s:Label text="Length:" fontWeight="bold"/>
+			<mx:Label text="{gene.length}" id="lengthLabel" selectable="true"/>
+		</s:HGroup>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Evalue:" fontWeight="bold"/>
+			<mx:Label text="{gene.evalue}" id="evalueLabel" selectable="true"/>
+			<s:Label text="Hit def:" fontWeight="bold"/>
+			<mx:Label id="hitDefLabel" text="{gene.hitDef}" selectable="true"/>
+		</s:HGroup>	
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Frameshifts:" fontWeight="bold"/>
+			<mx:Button id="frameshiftsButton" label="-" enabled="false" click="frameshiftsButton_clickHandler(event)"/>
+			<s:Label text="Extra stop codons:" fontWeight="bold"/>
+			<mx:Button id="stopCodonsButton" label="-" enabled="false" click="stopCodonsButton_clickHandler(event)"/>
+		</s:HGroup>
+		<s:Label text="Sequence:" fontWeight="bold" text.State1="Nucleotide sequence:"/>
+		<s:TextArea width="100%" editable="false" height="80" id="sequenceTextArea" text="{gene.sequence}"/>
+		<s:Label text="Protein sequence:" fontWeight="bold"/>
+		<s:TextArea width="100%" editable="false" id="proteinSequenceTextArea" 
+					text="{gene.proteinSequence}" height="70"/>
+	</mx:VBox>
+	
+	<mx:VBox width="100%" height="100%" backgroundColor="#ECECEC" paddingLeft="10" 
+			 paddingRight="10" paddingTop="10" paddingBottom="10" backgroundColor.State1="#E4E4E4">
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Annotation Uniprot id:" fontWeight="bold"/>
+			<mx:Label id="annotationUniprotIdLabel" text="{gene.annotationUniprotId}" selectable="true"
+					  useHandCursor="true" mouseChildren="false" buttonMode="true"
+					  click="annotationUniprotIdLabel_clickHandler(event)" textDecoration="underline" color="#0000FF"/>
+		</s:HGroup>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Organism:" fontWeight="bold"/>
+			<mx:Label id="organismLabel" text="{gene.organism}" selectable="true"/>
+		</s:HGroup>	
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label text="Protein family:" fontWeight="bold"/>
+			<mx:Label id="proteinFamilyLabel" text="{gene.proteinFamily}" selectable="true"/>
+		</s:HGroup>
+		<s:HGroup width="100%">
+			<s:VGroup width="100%">
+				<s:Label text="Comment function" fontWeight="bold"/>
+				<s:TextArea height="40" width="100%" id="commentFunctionLabel" 
+							text="{gene.commentFunction}" editable="false"/>
+			</s:VGroup>
+			<s:VGroup width="100%">
+				<s:Label text="Keywords:" fontWeight="bold"/>
+				<s:TextArea height="40" width="100%" id="keywordsTextArea" 
+							text="{gene.keywords}" editable="false"/>
+			</s:VGroup>
+		</s:HGroup>
+		<s:HGroup width="100%">
+			<s:VGroup width="100%">
+				<s:Label text="EC numbers:" fontWeight="bold"/>
+				<s:TextArea height="40" width="100%" id="ecNumbersTextArea" text="{gene.ecNumbers}" editable="false"/>
+			</s:VGroup>
+			<s:VGroup width="100%">
+				<s:Label text="Interpro:" fontWeight="bold"/>
+				<s:TextArea height="40" width="100%" id="interproLabel" text="{gene.interpro}" editable="false"/>
+			</s:VGroup>
+		</s:HGroup>
+		<s:HGroup width="100%">
+			<s:VGroup width="100%">
+				<s:Label text="Gene ontology:" fontWeight="bold"/>
+				<s:TextArea height="40" width="100%" id="geneOntologyTextArea" text="{gene.geneOntology}" editable="false"/>
+			</s:VGroup>
+			<s:VGroup width="100%">
+				<s:Label text="Pathway" fontWeight="bold"/>
+				<s:TextArea height="40" width="100%" id="pathwayTextArea" text="{gene.pathway}" editable="false"/>
+			</s:VGroup>
+		</s:HGroup>
+	</mx:VBox>
+	
+</mx:TitleWindow>

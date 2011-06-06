@@ -1,0 +1,1303 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:mx="library://ns.adobe.com/flex/mx"
+					   creationComplete="onCreationComplete()"
+					   width="100%"
+					   height="100%" 
+					   xmlns:search="com.era7.util.gui.search.*"
+					   implements="com.era7.communication.interfaces.ServerCallable"  
+					   backgroundColor="#3D3E3E">
+	<s:states>
+		<s:State name="State1"/>
+		<s:State name="LoadingState"/>
+	</s:states>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.era7.bioinfo.annotation.BG7IconsManager;
+			import com.era7.bioinfo.annotation.PredictedGeneWindow;
+			import com.era7.bioinfo.annotation.PredictedRnaTitleWindow;
+			import com.era7.bioinfo.annotation.comm.AnnotationMapper;
+			import com.era7.bioinfo.annotation.comm.RequestList;
+			import com.era7.bioinfo.annotation.event.PredictedGeneWindowEvent;
+			import com.era7.bioinfo.gui.EnterUrlTitleWindow;
+			import com.era7.bioinfo.gui.IconsManager;
+			import com.era7.bioinfo.gui.events.UrlEvent;
+			import com.era7.bioinfo.xml.annotation.PredictedGene;
+			import com.era7.bioinfo.xml.annotation.PredictedRna;
+			import com.era7.communication.xml.Request;
+			import com.era7.communication.xml.Response;
+			import com.era7.util.debug.Debugger;
+			import com.era7.util.events.SearchBarEvent;
+			
+			import flash.net.navigateToURL;
+			
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.controls.Alert;
+			import mx.events.ListEvent;
+			import mx.events.MenuEvent;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			[Embed(source="../assets/search.png")]
+			protected var searchIcon:Class;
+			
+			[Bindable]
+			[Embed(source="../assets/nextPage.png")]
+			protected var nextResultIcon:Class;
+			
+			[Bindable]
+			[Embed(source="../assets/previousPage.png")]
+			protected var previousResultIcon:Class;
+						
+			[Bindable]
+			protected var xml:XML = null;
+			[Bindable]
+			protected var dismissedGenes:XMLList = null;
+			[Bindable]
+			protected var allGenes:XMLList = null;
+			[Bindable]
+			protected var contig:XML = null;
+			[Bindable]
+			protected var contigRna:XML = null;
+			[Bindable] 
+			protected var contigSinDismissed:XML = null;
+			
+			protected var geneWindow:PredictedGeneWindow = null;
+			protected var rnaWindow:PredictedRnaTitleWindow = null;
+			protected var loadDataAlert:Alert = null;
+			
+			protected var genesDataGridDoubleClicked:Boolean = false;
+			protected var allGenesDataGridDoubleClicked:Boolean = false;				
+			
+			protected var urlTitleWindow:EnterUrlTitleWindow = null;
+			
+			
+			protected var annotationMapper:AnnotationMapper = null;
+			
+			public static const LOADING_STATE:String = "LoadingState";
+			public static const BASE_STATE:String = "";
+			
+			/*
+			*	ON CREATION COMPLETE
+			*/
+			protected function onCreationComplete():void
+			{
+			
+				
+				contigGenesSearchBar.addEventListener(SearchBarEvent.SEARCH,onSearchContigGenes);
+				contigGenesSearchBar.addEventListener(SearchBarEvent.GO_TO_ELEMENT,onGoToElementContigGenes);
+				
+				allGenesSearchBar.addEventListener(SearchBarEvent.SEARCH,onSearchAllGenes);
+				allGenesSearchBar.addEventListener(SearchBarEvent.GO_TO_ELEMENT,onGoToElementAllGenes);
+				
+				dismissedGenesSearchBar.addEventListener(SearchBarEvent.SEARCH,onSearchDismissedGenes);
+				dismissedGenesSearchBar.addEventListener(SearchBarEvent.GO_TO_ELEMENT,onGoToElementDismissedGenes);
+				
+				contigRnasSearchBar.addEventListener(SearchBarEvent.SEARCH,onSearchContigRnas);
+				contigRnasSearchBar.addEventListener(SearchBarEvent.GO_TO_ELEMENT,onGoToElementContigRnas);
+				
+				
+				annotationMapper = new AnnotationMapper();
+				
+			}
+			
+			protected function onSearchContigRnas(event:SearchBarEvent):void{
+				var items:XMLList = XMLList(rnasDataGrid.dataProvider).(name() == PredictedRna.TAG_NAME);
+				
+				var results:Array = new Array();
+				var list:XMLList = XMLList(items.((child(String(contigRnasSearchComboBox.selectedItem))).text().toUpperCase().indexOf(event.getSearchText().toUpperCase()) >=0 ));
+				for each(var tempXML:XML in list){
+					var tempRna:PredictedRna = new PredictedRna(tempXML);
+					results.push(tempRna.id);
+				}
+				contigRnasSearchBar.setResults(results); 				
+			}
+			protected function onGoToElementContigRnas(event:SearchBarEvent):void{				
+				var list:XMLList = XMLList(rnasDataGrid.dataProvider).(name() == PredictedRna.TAG_NAME);
+				var found:Boolean = false;
+				
+				if(selectAllResultsContigRnasCheckBox.selected){
+					
+					selectResultsOnDataGridGeneric(rnasDataGrid,
+						contigRnasSearchBar.getResults(),
+						list,
+						true);					
+					
+				}else{
+					for(var i:int=0;i<list.length() && !found;i++){
+						var tempRna:PredictedRna = new PredictedRna(list[i]);
+						if(tempRna.id == event.getSearchText()){
+							rnasDataGrid.selectedIndex = i;	
+							rnasDataGrid.scrollToIndex(i);
+							found = true;
+						}
+					}	
+				}			 			
+			}
+			
+			protected function onSearchContigGenes(event:SearchBarEvent):void{
+				var items:XMLList = XMLList(genesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME);
+				
+				var results:Array = new Array();
+				var list:XMLList = XMLList(items.((child(String(contigGenesSearchComboBox.selectedItem))).text().toUpperCase().indexOf(event.getSearchText().toUpperCase()) >=0 ));
+				for each(var tempXML:XML in list){
+					var tempGene:PredictedGene = new PredictedGene(tempXML);
+					results.push(tempGene.id);
+				}
+				contigGenesSearchBar.setResults(results); 				
+			}
+			protected function onGoToElementContigGenes(event:SearchBarEvent):void{				
+				var list:XMLList = XMLList(genesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME);
+				var found:Boolean = false;
+				
+				if(selectAllResultsContigGenesCheckBox.selected){
+					
+					selectResultsOnDataGridGeneric(genesDataGrid,
+						contigGenesSearchBar.getResults(),
+						list);					
+					
+				}else{
+					for(var i:int=0;i<list.length() && !found;i++){
+						var tempGene:PredictedGene = new PredictedGene(list[i]);
+						if(tempGene.id == event.getSearchText()){
+							genesDataGrid.selectedIndex = i;	
+							genesDataGrid.scrollToIndex(i);
+							found = true;
+						}
+					}	
+				}			 			
+			}
+			
+			protected function onSearchDismissedGenes(event:SearchBarEvent):void{
+				var items:XMLList = XMLList(dismissedGenesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME);
+				
+				var results:Array = new Array();
+				var list:XMLList = XMLList(items.((child(String(dismissedGenesSearchComboBox.selectedItem))).text().toUpperCase().indexOf(event.getSearchText().toUpperCase()) >=0 ));
+				for each(var tempXML:XML in list){
+					var tempGene:PredictedGene = new PredictedGene(tempXML);
+					results.push(tempGene.id);
+				}
+				dismissedGenesSearchBar.setResults(results); 				
+			}
+			protected function onGoToElementDismissedGenes(event:SearchBarEvent):void{				
+				var list:XMLList = XMLList(dismissedGenesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME);
+				var found:Boolean = false;
+				
+				if(selectAllResultsDismissedGenesCheckBox.selected){
+					
+					selectResultsOnDataGridGeneric(dismissedGenesDataGrid,
+						dismissedGenesSearchBar.getResults(),
+						list);					
+					
+				}else{
+					for(var i:int=0;i<list.length() && !found;i++){
+						var tempGene:PredictedGene = new PredictedGene(list[i]);
+						if(tempGene.id == event.getSearchText()){
+							dismissedGenesDataGrid.selectedIndex = i;	
+							dismissedGenesDataGrid.scrollToIndex(i);
+							found = true;
+						}
+					}	
+				}			 			
+			}
+			protected function onSearchAllGenes(event:SearchBarEvent):void{
+				var items:XMLList = XMLList(allGenesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME);
+				
+				var results:Array = new Array();
+				var list:XMLList = XMLList(items.((child(String(allGenesSearchComboBox.selectedItem))).text().toUpperCase().indexOf(event.getSearchText().toUpperCase()) >=0 ));
+				for each(var tempXML:XML in list){
+					var tempGene:PredictedGene = new PredictedGene(tempXML);
+					results.push(tempGene.id);
+				}
+				allGenesSearchBar.setResults(results); 				
+			}			
+			protected function onGoToElementAllGenes(event:SearchBarEvent):void{	
+				
+				var list:XMLList = XMLList(allGenesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME);
+				var found:Boolean = false;
+				
+				if(selectAllResultsAllGenesCheckBox.selected){
+					
+					selectResultsOnDataGridGeneric(allGenesDataGrid,
+						allGenesSearchBar.getResults(),
+						list);					
+					
+				}else{
+					for(var i:int=0;i<list.length() && !found;i++){
+						var tempGene:PredictedGene = new PredictedGene(list[i]);
+						if(tempGene.id == event.getSearchText()){
+							allGenesDataGrid.selectedIndex = i;	
+							allGenesDataGrid.scrollToIndex(i);
+							found = true;
+						}
+					}
+				}
+				
+				
+			}
+			
+			protected function onLoaderComplete(event:Event):void{
+				
+				var fileContents:String = URLLoader(event.target).data;
+				
+				
+			}			
+					
+			
+			protected function contigsDataGrid_itemClickHandler(event:ListEvent):void
+			{
+				if(contigsDataGrid.selectedItem != null){
+					contig = XML(contigsDataGrid.selectedItem);
+					contigSinDismissed = <contig/>;
+					var list:XMLList = contig.child(PredictedGene.TAG_NAME);
+					for each(var temp:XML in list){
+						var tempGene:PredictedGene = new PredictedGene(temp);				
+						if(tempGene.status != PredictedGene.STATUS_DISMISSED){							
+							contigSinDismissed.appendChild(temp);
+						}
+					}
+				}
+			}
+			
+			protected function browseButtonMuestra1_clickHandler(event:MouseEvent):void
+			{
+				//file.browse([new FileFilter("archivos xml: ","*.xml")]);
+			}
+			
+			protected function rnasNumberSortCompareFunction(obj1:Object,obj2:Object):int{
+				return genericNumberSortFunction(obj1,obj2,"rnas_number");			
+			}
+			protected function evalueSortCompareFunction(obj1:Object,obj2:Object):int{
+				return genericNumberSortFunction(obj1,obj2,PredictedGene.EVALUE_TAG_NAME);			
+			}
+			protected function genesNumberSortCompareFunction(obj1:Object,obj2:Object):int{
+				return genericNumberSortFunction(obj1,obj2,"genes_number");			
+			}
+			protected function startPositionSortCompareFunction(obj1:Object,obj2:Object):int{
+				return genericNumberSortFunction(obj1,obj2,PredictedGene.START_POSITION_TAG_NAME);			
+			}
+			protected function endPositionSortCompareFunction(obj1:Object,obj2:Object):int{
+				return genericNumberSortFunction(obj1,obj2,PredictedGene.END_POSITION_TAG_NAME);			
+			}
+			protected function idSortCompareFunction(obj1:Object,obj2:Object):int{
+				return genericNumberSortFunction(obj1,obj2,PredictedGene.ID_TAG_NAME);			
+			}
+			
+			protected function genericNumberSortFunction(obj1:Object,obj2:Object,tagName:String):int{
+				var xml1:XML = XML(obj1);
+				var xml2:XML = XML(obj2);
+				
+				var n1:Number = Number(xml1.child(tagName)[0]);
+				var n2:Number = Number(xml2.child(tagName)[0]);
+				if(n1 < n2){
+					return -1;
+				}else if(n1 == n2){
+					return 0;
+				}else{
+					return 1;
+				}
+			}
+			
+			
+			protected function allGenesDataGrid_itemDoubleClickHandler(event:ListEvent):void
+			{
+				genesDataGridDoubleClicked = false;
+				allGenesDataGridDoubleClicked = true;
+				if(allGenesDataGrid.selectedItem != null){
+					var gene:XML = XML(allGenesDataGrid.selectedItem);
+					openWindowWithGene(new PredictedGene(gene));
+				}				
+			}
+			
+			protected function dismissedGenesDataGrid_itemDoubleClickHandler(event:ListEvent):void
+			{
+				genesDataGridDoubleClicked = false;
+				allGenesDataGridDoubleClicked = false;
+				if(dismissedGenesDataGrid.selectedItem != null){
+					var gene:XML = XML(dismissedGenesDataGrid.selectedItem);
+					openWindowWithGene(new PredictedGene(gene),false);
+				}
+			}
+			
+			protected function initGeneWindow():void{
+				if(geneWindow == null){
+					geneWindow = PredictedGeneWindow(PopUpManager.createPopUp(this,PredictedGeneWindow));
+					geneWindow.addEventListener(PredictedGeneWindowEvent.GO_TO_NEXT_GENE,onGoToNextGene);
+					geneWindow.addEventListener(PredictedGeneWindowEvent.GO_TO_PREVIOUS_GENE,onGoToPreviousGene);
+					PopUpManager.centerPopUp(geneWindow);
+				}
+				PopUpManager.bringToFront(geneWindow);
+				geneWindow.visible = true;
+			}
+			
+			protected function openWindowWithGene(gene:PredictedGene,showButtonsInWindow:Boolean=true):void{
+				initGeneWindow();
+				if(showButtonsInWindow){
+					geneWindow.currentState = "";
+				}else{
+					geneWindow.currentState = PredictedGeneWindow.NO_BUTTONS_STATE;
+				}
+				geneWindow.setGene(gene);
+			}
+			
+			
+			protected function genesDataGrid_itemDoubleClickHandler(event:ListEvent):void
+			{
+				genesDataGridDoubleClicked = true;
+				allGenesDataGridDoubleClicked = false;
+				if(genesDataGrid.selectedItem != null){
+					var gene:XML = XML(genesDataGrid.selectedItem);
+					openWindowWithGene(new PredictedGene(gene));					
+				}
+			}
+			
+			
+			protected function contigsRnaDataGrid_itemClickHandler(event:ListEvent):void
+			{
+				if(contigsRnaDataGrid.selectedItem != null){
+					contigRna = XML(contigsRnaDataGrid.selectedItem);
+				}
+			}
+			
+			
+			protected function initRnaWindow():void{
+				if(rnaWindow == null){
+					rnaWindow = PredictedRnaTitleWindow(PopUpManager.createPopUp(this,PredictedRnaTitleWindow));
+					PopUpManager.centerPopUp(rnaWindow);
+				}
+				PopUpManager.bringToFront(rnaWindow);
+				rnaWindow.visible = true;
+			}
+			
+			protected function rnasDataGrid_itemDoubleClickHandler(event:ListEvent):void
+			{
+				if(rnasDataGrid.selectedItem != null){
+					var rna:XML = XML(rnasDataGrid.selectedItem);
+					initRnaWindow();
+					rnaWindow.setRna(new PredictedRna(rna));
+				}
+			}
+			
+			protected function onGoToPreviousGene(event:PredictedGeneWindowEvent):void{
+				
+				if(genesDataGridDoubleClicked){
+					
+					var index:int = XML(genesDataGrid.selectedItem).childIndex() -1;
+					if(index >= 0){
+						genesDataGrid.selectedIndex = index;
+						genesDataGrid.scrollToIndex(index);
+						geneWindow.setGene(new PredictedGene(contigSinDismissed.predicted_gene[index]));
+					}else{
+						Alert.show("First gene reached");
+					}
+					
+				}else if(allGenesDataGridDoubleClicked){
+					
+					var index2:int = XML(allGenesDataGrid.selectedItem).childIndex() -2;
+					
+					//Debugger.appendText("index2: " + index2,Debugger.ERROR_MODE);
+					
+					if(index2 >= 0){
+						allGenesDataGrid.selectedIndex = index2;
+						allGenesDataGrid.scrollToIndex(index2);
+						geneWindow.setGene(new PredictedGene(allGenes[index2]));
+						//Debugger.appendText("allGenes[index2]: " + allGenes[index2].toXMLString(),Debugger.ERROR_MODE);
+					}else{
+						Alert.show("First gene reached");
+					}
+					
+				}
+			}
+			protected function onGoToNextGene(event:PredictedGeneWindowEvent):void{
+				if(genesDataGridDoubleClicked){
+					
+					var index:int = XML(genesDataGrid.selectedItem).childIndex() + 1;
+					if(index < XMLList(contigSinDismissed.predicted_gene).length()){
+						genesDataGrid.selectedIndex = index;
+						genesDataGrid.scrollToIndex(index);
+						geneWindow.setGene(new PredictedGene(contigSinDismissed.predicted_gene[index]));
+					}else{
+						Alert.show("Last gene reached");
+					}
+					
+				}else if(allGenesDataGridDoubleClicked){
+					
+					var index2:int = XML(allGenesDataGrid.selectedItem).childIndex();
+					if(index2 < allGenes.length()){
+						allGenesDataGrid.selectedIndex = index2;
+						allGenesDataGrid.scrollToIndex(index2);
+						geneWindow.setGene(new PredictedGene(allGenes[index2]));
+					}else{
+						Alert.show("Last gene reached");
+					}
+					
+				}
+			}
+			
+			protected function onHeaderClick():void{
+				navigateToURL(new URLRequest("http://www.era7bioinformatics.com"));
+			}
+			
+			protected function selectAllGenesContigButton_clickHandler(event:MouseEvent):void
+			{
+				var array:Array = new Array();
+				for(var i:int=0;i<XMLList(contigSinDismissed.predicted_gene).length();i++){
+					array.push(i);
+				}
+				genesDataGrid.selectedIndices = array;
+			}
+			
+			
+			protected function selectAllGenesButton_clickHandler(event:MouseEvent):void
+			{
+				var array:Array = new Array();
+				for(var i:int=0;i<allGenes.length();i++){
+					array.push(i);
+				}
+				allGenesDataGrid.selectedIndices = array;
+			}
+			protected function selectAllDismissedGenesButton_clickHandler(event:MouseEvent):void
+			{
+				var array:Array = new Array();
+				for(var i:int=0;i<dismissedGenes.length();i++){
+					array.push(i);
+				}
+				dismissedGenesDataGrid.selectedIndices = array;
+			}
+			protected function selectAllRnasContigButton_clickHandler(event:MouseEvent):void
+			{
+				var array:Array = new Array();
+				for(var i:int=0;i<contigRna.child(PredictedRna.TAG_NAME).length();i++){
+					array.push(i);
+				}
+				rnasDataGrid.selectedIndices = array;
+			}
+			
+			
+			/* protected function exportToFastaFileAllGenesButton_clickHandler(event:MouseEvent):void
+			{
+				if(fileNameAllGenesTextInput.text.indexOf(".fasta") < 0){
+					Alert.show("Please type a fasta file name");
+				}else{
+					if(allGenesDataGrid.selectedItems != null){
+						var list:XMLList = new XMLList(allGenesDataGrid.selectedItems);
+						//Alert.show(""+allGenesDataGrid.selectedItems.length);
+						exportGenesToFastaFile(list,fileNameAllGenesTextInput.text);
+					}
+				}
+				
+			} */
+			
+			
+			/* protected function exportToFastaFileGenesContigButton_clickHandler(event:MouseEvent):void
+			{
+				if(fileNameGenesContigTextInput.text.indexOf(".fasta") < 0){
+					Alert.show("Please type a file name");
+				}else{
+					if(genesDataGrid.selectedItems != null){
+						var list:XMLList = new XMLList(genesDataGrid.selectedItems);
+						exportGenesToFastaFile(list,fileNameGenesContigTextInput.text);
+					}
+				}				
+			} */
+			/* protected function exportToFastaFileDismissedGenesButton_clickHandler(event:MouseEvent):void
+			{
+				if(fileNameDismissedGenesTextInput.text.indexOf(".fasta") < 0){
+					Alert.show("Please type a fasta file name");
+				}else{
+					if(dismissedGenesDataGrid.selectedItems != null){
+						var list:XMLList = new XMLList(dismissedGenesDataGrid.selectedItems);
+						exportGenesToFastaFile(list,fileNameDismissedGenesTextInput.text);
+					}
+				}
+			} */
+			/* protected function exportToFastaFileRnasContigButton_clickHandler(event:MouseEvent):void
+			{
+				if(fileNameRnasContigTextInput.text.indexOf(".fasta") < 0){
+					Alert.show("Please type a fasta file name");
+				}else{
+					if(rnasDataGrid.selectedItems != null){
+						var list:XMLList = new XMLList(rnasDataGrid.selectedItems);
+						exportGenesToFastaFile(list,fileNameRnasContigTextInput.text,true);
+					}
+				}
+			} */
+			
+			/* protected function exportGenesToFastaFile(list:XMLList, fileName:String,areRnas:Boolean=false):void{
+				
+				var outFile:File = File.desktopDirectory.resolvePath(fileName);
+				var fileStream:FileStream = new FileStream();
+				fileStream.open(outFile,FileMode.WRITE);
+				
+				for each(var tempElem:XML in list){
+					if(tempElem.name() == PredictedGene.TAG_NAME || tempElem.name() == PredictedRna.TAG_NAME){
+						var temp:Object = null;
+						var header:String = "";
+						if(areRnas){
+							temp = new PredictedRna(tempElem);
+							header = ">" + temp.annotationUniprotId +
+								"|" + temp.id + 
+								"|" + temp.startPosition + ".." + temp.endPosition +
+								"|" + temp.evalue + "\n";
+						}else{
+							temp = new PredictedGene(tempElem);
+							header = ">" + temp.hitDef +
+								"|" + temp.id + 
+								"|" + temp.startPosition + ".." + temp.endPosition +
+								"|" + temp.evalue + "\n";
+						}
+						
+						fileStream.writeUTFBytes(header);
+						var seq:String = temp.sequence;
+						if(seq.length <= 60){
+							fileStream.writeUTFBytes(seq + "\n");
+						}else{
+							while(seq.length > 60){
+								fileStream.writeUTFBytes(seq.substr(0,60) + "\n");
+								seq = seq.substr(60);
+							}
+							fileStream.writeUTFBytes(seq + "\n");
+						}
+					}				
+					
+				}					
+				
+				fileStream.close();
+				
+				Alert.show("File with name " + fileName + " created successfully on the desktop");
+				
+			} */
+			
+			
+			
+			protected function selectAllResultsAllGenesCheckBox_clickHandler(event:MouseEvent):void
+			{
+				if(allGenesSearchBar.getResults() != null){
+					if(selectAllResultsAllGenesCheckBox.selected){
+						
+						selectResultsOnDataGridGeneric(allGenesDataGrid,
+							allGenesSearchBar.getResults(),
+							XMLList(allGenesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME));
+						
+					}else{
+						
+						selectResultsOnDataGridGeneric(allGenesDataGrid,
+							new Array(allGenesSearchBar.getResults()[0]),
+							XMLList(allGenesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME));
+						
+					}
+				}				
+				
+			}
+			
+			protected function selectAllResultsDismissedGenesCheckBox_clickHandler(event:MouseEvent):void
+			{
+				if(dismissedGenesSearchBar.getResults() != null){
+					if(selectAllResultsDismissedGenesCheckBox.selected){
+						
+						selectResultsOnDataGridGeneric(dismissedGenesDataGrid,
+							dismissedGenesSearchBar.getResults(),
+							XMLList(dismissedGenesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME));
+						
+					}else{
+						
+						selectResultsOnDataGridGeneric(dismissedGenesDataGrid,
+							new Array(dismissedGenesSearchBar.getResults()[0]),
+							XMLList(dismissedGenesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME));
+						
+					}
+				}	
+			}
+			
+			protected function selectAllResultsContigGenesCheckBox_clickHandler(event:MouseEvent):void
+			{
+				if(contigGenesSearchBar.getResults() != null){
+					if(selectAllResultsContigGenesCheckBox.selected){
+						
+						selectResultsOnDataGridGeneric(genesDataGrid,
+							contigGenesSearchBar.getResults(),
+							XMLList(genesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME));
+						
+					}else{
+						
+						selectResultsOnDataGridGeneric(genesDataGrid,
+							new Array(contigGenesSearchBar.getResults()[0]),
+							XMLList(genesDataGrid.dataProvider).(name() == PredictedGene.TAG_NAME));
+						
+					}
+				}
+			}
+			protected function selectAllResultsContigRnasCheckBox_clickHandler(event:MouseEvent):void
+			{
+				if(contigRnasSearchBar.getResults() != null){
+					if(selectAllResultsContigRnasCheckBox.selected){
+						
+						selectResultsOnDataGridGeneric(rnasDataGrid,
+							contigRnasSearchBar.getResults(),
+							XMLList(rnasDataGrid.dataProvider).(name() == PredictedRna.TAG_NAME),
+							true);
+						
+					}else{
+						
+						selectResultsOnDataGridGeneric(rnasDataGrid,
+							new Array(contigRnasSearchBar.getResults()[0]),
+							XMLList(rnasDataGrid.dataProvider).(name() == PredictedRna.TAG_NAME),
+							true);
+						
+					}
+				}
+			}
+			
+			
+			protected function selectResultsOnDataGridGeneric(dg:DataGrid,
+															  results:Array,
+															  list:XMLList,
+															  areRnas:Boolean=false):void{
+				var indexes:Array = new Array();			
+				
+				for(var j:int=0;j<list.length();j++){
+					var tempId:String = "";
+					if(!areRnas){
+						var tempG:PredictedGene = new PredictedGene(list[j]);
+						tempId = tempG.id;
+					}else{
+						var tempR:PredictedRna = new PredictedRna(list[j]);
+						tempId = tempR.id;
+					}
+					
+					if(results.indexOf(tempId) >= 0){
+						indexes.push(j);
+					}
+				}
+				
+				dg.selectedIndices = indexes;
+				dg.scrollToIndex(indexes[0]);
+			}
+			
+			/* protected function exportToXmlFileContigGenesButton_clickHandler(event:MouseEvent):void
+			{
+				var idsSelected:Array = new Array();
+				var idsContigs:Array = new Array();
+				//primero obtengo los ids de los genes seleccionados
+				var list:XMLList = XMLList(genesDataGrid.selectedItems).(name() == PredictedGene.TAG_NAME);
+				for each(var temp:XML in list){
+					//Debugger.appendText(temp.toXMLString(),Debugger.ERROR_MODE);
+					var pg:PredictedGene = new PredictedGene(temp);
+					idsSelected.push(pg.id);
+					if(idsContigs.indexOf(pg.contigId) < 0){
+						idsContigs.push(pg.contigId);
+					}
+				}
+				if(fileNameGenesContigTextInput.text.indexOf(".xml") < 0){
+					Alert.show("Please enter a xml file name");
+				}else{
+					exportGenesToXml(idsSelected,idsContigs,fileNameGenesContigTextInput.text);
+				}				
+			} */
+			
+			/* protected function exportToXmlFileAllGenesButton_clickHandler(event:MouseEvent):void
+			{
+				var idsSelected:Array = new Array();
+				var idsContigs:Array = new Array();
+				//primero obtengo los ids de los genes seleccionados
+				var list:XMLList = XMLList(allGenesDataGrid.selectedItems).(name() == PredictedGene.TAG_NAME);
+				for each(var temp:XML in list){
+					var pg:PredictedGene = new PredictedGene(temp);
+					idsSelected.push(pg.id);
+					if(idsContigs.indexOf(pg.contigId) < 0){
+						idsContigs.push(pg.contigId);
+					}
+				}
+				if(fileNameAllGenesTextInput.text.indexOf(".xml") < 0){
+					Alert.show("Please enter a xml file name");
+				}else{
+					exportGenesToXml(idsSelected,idsContigs,fileNameAllGenesTextInput.text);
+				}
+			} */
+			/* protected function exportToXmlFileDismissedGenesButton_clickHandler(event:MouseEvent):void
+			{
+				var idsSelected:Array = new Array();
+				var idsContigs:Array = new Array();
+				//primero obtengo los ids de los genes seleccionados
+				var list:XMLList = XMLList(dismissedGenesDataGrid.selectedItems).(name() == PredictedGene.TAG_NAME);
+				for each(var temp:XML in list){
+					var pg:PredictedGene = new PredictedGene(temp);
+					idsSelected.push(pg.id);
+					if(idsContigs.indexOf(pg.contigId) < 0){
+						idsContigs.push(pg.contigId);
+					}
+				}
+				if(fileNameDismissedGenesTextInput.text.indexOf(".xml") < 0){
+					Alert.show("Please enter a xml file name");
+				}else{
+					exportGenesToXml(idsSelected,idsContigs,fileNameDismissedGenesTextInput.text);
+				}
+			} */
+			/* protected function exportToXmlFileContigRnasButton_clickHandler(event:MouseEvent):void
+			{
+				var idsSelected:Array = new Array();
+				var idsContigs:Array = new Array();
+				//primero obtengo los ids de los genes seleccionados
+				var list:XMLList = XMLList(rnasDataGrid.selectedItems).(name() == PredictedRna.TAG_NAME);
+				for each(var temp:XML in list){
+					var pr:PredictedRna = new PredictedRna(temp);
+					idsSelected.push(pr.id);
+					if(idsContigs.indexOf(pr.contigId) < 0){
+						idsContigs.push(pr.contigId);
+					}
+				}
+				
+				Debugger.appendText(idsSelected.toString(),Debugger.ERROR_MODE);
+				Debugger.appendText(idsContigs.toString(),Debugger.ERROR_MODE);
+				
+				if(fileNameRnasContigTextInput.text.indexOf(".xml") < 0){
+					Alert.show("Please enter a xml file name");
+				}else{
+					exportGenesToXml(idsSelected,idsContigs,fileNameRnasContigTextInput.text,true);
+				}
+			} */
+			
+			/* protected function exportGenesToXml(idsGenes:Array,
+												idsContigs:Array,
+												fileName:String,
+												areRnas:Boolean = false):void{
+				
+				var outFile:File = File.desktopDirectory.resolvePath(fileName);
+				var fileStream:FileStream = new FileStream();
+				fileStream.open(outFile,FileMode.WRITE);
+				if(!areRnas){
+					fileStream.writeUTFBytes("<annotation>\n<predicted_genes>\n");
+				}else{
+					fileStream.writeUTFBytes("<annotation>\n<predicted_rnas>\n");
+				}				
+				
+				var contigList:XMLList = null;
+				if(!areRnas){
+					contigList = xml.predicted_genes.contig.(idsContigs.indexOf(id.toString()) >= 0);
+				}else{
+					contigList = xml.predicted_rnas.contig.(idsContigs.indexOf(id.toString()) >= 0);
+				}					
+				
+				for each(var contig:XML in contigList){
+					var elems:XMLList = null;
+					if(!areRnas){
+						elems = contig.child(PredictedGene.TAG_NAME).(idsGenes.indexOf(id.toString()) >= 0);
+					}else{
+						elems = contig.child(PredictedRna.TAG_NAME).(idsGenes.indexOf(id.toString()) >= 0);
+					}
+					
+					fileStream.writeUTFBytes("<contig>\n<id>" + contig.id.toString() + "</id>\n");
+					for each(var elem:XML in elems){
+						fileStream.writeUTFBytes(elem.toXMLString());
+					}
+					fileStream.writeUTFBytes("</contig>\n");
+				}
+				
+				if(!areRnas){
+					fileStream.writeUTFBytes("</predicted_genes>\n</annotation>");
+				}else{
+					fileStream.writeUTFBytes("</predicted_rnas>\n</annotation>");
+				}
+				
+				fileStream.close();				
+				Alert.show("File with name " + fileName + " created successfully on the desktop");
+			} */
+			
+			
+			protected function loadFileFromUrlButton_clickHandler(event:MouseEvent):void
+			{
+				initEnterUrlTitleWindow();
+			}
+			
+			protected function initEnterUrlTitleWindow():void{
+				if(urlTitleWindow == null){
+					urlTitleWindow = EnterUrlTitleWindow(PopUpManager.createPopUp(this,EnterUrlTitleWindow,true));
+					urlTitleWindow.addEventListener(UrlEvent.URL_SELECTED, onUrlSelected);
+					PopUpManager.centerPopUp(urlTitleWindow);
+				}
+				PopUpManager.bringToFront(urlTitleWindow);
+				urlTitleWindow.visible = true;
+				
+			}
+			
+			 protected function onUrlSelected(event:UrlEvent):void{							
+				
+				annotationMapper.loadAnnotationFileFromUrl(this,event.getUrl());
+				
+				fileLabel.text = event.getUrl();
+				
+				this.currentState = LOADING_STATE;
+				
+			} 
+			
+			
+			//----------------------------------------------------------------------------
+			//---------------------------SERVER COMMUNICATION-----------------------------
+			//----------------------------------------------------------------------------
+			
+			/**
+			 * 	PROCESS SUCCESSFUL RESPONSE
+			 */
+			public function processSuccessfulResponse(response:Response):void{
+				
+				if(response.getMethod() == RequestList.LOAD_ANNOTATION_FILE_FROM_URL_REQUEST){
+					
+					
+					xml = new XML(response.getContent().annotation);
+					
+					var contigList:XMLList = xml.predicted_genes.contig;
+					for each(var c:XML in contigList){
+						var gNumber:Number = XMLList(c.predicted_gene).length();
+						c.genes_number = gNumber;
+					}
+					
+					var contigListRna:XMLList = xml.predicted_rnas.contig;
+					for each(var cr:XML in contigListRna){
+						var rNumber:Number = XMLList(cr.predicted_rna).length();
+						cr.rnas_number = rNumber;
+					}
+					
+					//Agrego el contig_id a los rnas
+					var listRnas:XMLList = xml..predicted_rna;
+					for each(var tempR:XML in listRnas){
+						//var rna:PredictedRna = new PredictedRna(tempR);
+						var parent:XML = XML(tempR.parent());
+						//Debugger.appendText(parent.id[0].toString(),Debugger.ERROR_MODE);
+						tempR.contig_id = parent.id[0].toString();
+					}	
+					//Debugger.appendText(listRnas.toXMLString(),Debugger.ERROR_MODE);
+					
+					var list:XMLList = xml..predicted_gene;
+					
+					//Separo los genes por dismissed y selected y les agrego el contig_id
+					for each(var temp:XML in list){
+						var contigId:String = XML(temp.parent()).id[0].toString();
+						temp.contig_id = contigId;
+						var status:String = XML(temp.status[0]).toString();						
+						if(status == "dismissed"){						
+							if(dismissedGenes == null){
+								dismissedGenes = new XMLList(temp);
+							}else{							
+								dismissedGenes += temp;
+							}						
+						}else{
+							if(allGenes == null){
+								allGenes = new XMLList(temp);
+							}else{							
+								allGenes += temp;
+							}
+						}
+					}
+					
+					
+					//Por ultimo autoselecciono el primer contig para que el datagrid no salga vacio
+					contigsDataGrid.selectedIndex = 0;
+					contigsDataGrid_itemClickHandler(null);
+					//Lo mismo con los contigs para rnas
+					contigsRnaDataGrid.selectedIndex = 0;
+					contigsRnaDataGrid_itemClickHandler(null);
+				}
+			}
+			/**
+			 * 	PROCESS ERROR RESPONSE
+			 */
+			public function processErrorResponse(response:Response):void{
+				Alert.show(response.getErrorItem().getDescription());				
+				this.currentState = BASE_STATE;
+			}
+			/**
+			 * 	PROCESS NO SESSION RESPONSE
+			 */
+			public function processNoSessionResponse(response:Response):void{}
+			/**
+			 * 	PROCESS REQUEST TIMEOUT
+			 */
+			public function processRequestTimeout(request:Request):void{}
+			
+			//----------------------------------------------------------------------------
+			//----------------------------------------------------------------------------
+			
+			
+			protected function era7Logo_clickHandler(event:MouseEvent):void
+			{
+				navigateToURL(new URLRequest("http://www.era7bioinformatics.com"),"_blank");
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:VBox 
+			 backgroundColor="#E6E6E6" 
+			 paddingLeft="10" 
+			 paddingRight="10" 
+			 paddingTop="10" 
+			 paddingBottom="10"
+			 top="110" 
+			 left="15"
+			 bottom="15" 
+			 right="15" cornerRadius.State1="10">
+		<mx:HBox verticalAlign="middle" 
+				 width="100%" 
+				 backgroundColor="#E3E3E3" 
+				 paddingLeft="0" 
+				 paddingTop="0" 
+				 paddingRight="0" 
+				 paddingBottom="0">			
+			<!--<mx:SWFLoader id="loadFileButton"
+					  source="{IconsManager.loadFileButton}"
+					  click="uploadFileButton_clickHandler(event)"
+					  buttonMode="true"
+					  mouseChildren="false"
+					  useHandCursor="true" 
+					  height="35"/>-->
+			<mx:SWFLoader id="loadFileFromUrlButton"
+						  source="{IconsManager.loadFileFromUrlButton}"
+						  click="loadFileFromUrlButton_clickHandler(event)"
+						  buttonMode="true"
+						  mouseChildren="false"
+						  useHandCursor="true" 
+						  height="35"/>
+			<mx:Spacer width="100%"/>
+			<s:Label text="File loaded:" fontWeight="bold"/>
+			<s:Label id="fileLabel"/>
+		</mx:HBox>
+		<mx:TabNavigator width="100%"
+						 height="100%" 
+						 creationPolicy="all"
+						 backgroundColor="#E6E6E6" 
+						 paddingLeft="10" 
+						 paddingRight="10" 
+						 paddingBottom="10">				
+			<mx:HDividedBox label="Contigs" width="100%" height="100%">
+				<mx:VBox  width="30%" height="100%">
+					<mx:DataGrid id="contigsDataGrid" 
+								 height="100%" width="100%"
+								 dataProvider="{xml.predicted_genes.contig}" 
+								 itemClick="contigsDataGrid_itemClickHandler(event)" selectable="true">
+						<mx:columns>
+							<mx:DataGridColumn headerText="contig ID" 
+											   dataField="id"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+							<mx:DataGridColumn headerText="Number of genes" dataField="genes_number"
+											   sortDescending="true" 
+											   sortCompareFunction="genesNumberSortCompareFunction"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"
+											   width="120"/>
+						</mx:columns>
+					</mx:DataGrid>
+				</mx:VBox>
+				<mx:VBox  width="70%" height="100%">
+					<s:HGroup width="100%" verticalAlign="middle">
+						<s:ComboBox id="contigGenesSearchComboBox" selectedIndex="0">
+							<s:dataProvider>
+								<mx:ArrayList>
+									<fx:String>{PredictedGene.PROTEIN_NAMES_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.ID_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.STATUS_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.START_POSITION_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.END_POSITION_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.STRAND_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.START_IS_CANONICAL_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.END_IS_CANONICAL_TAG_NAME}</fx:String>
+								</mx:ArrayList>
+							</s:dataProvider>
+						</s:ComboBox>
+						<search:SearchBar width="100%" id="contigGenesSearchBar"
+										  searchIcon="{searchIcon}"
+										  nextResultIcon="{nextResultIcon}"
+										  previousResultIcon="{previousResultIcon}">
+						</search:SearchBar>
+						<s:CheckBox label="Select all results" 
+									id="selectAllResultsContigGenesCheckBox" 
+									selected="false" 
+									click="selectAllResultsContigGenesCheckBox_clickHandler(event)"/>
+					</s:HGroup>
+					<mx:DataGrid id="genesDataGrid" 
+								 width="100%" height="100%"
+								 allowMultipleSelection="true"
+								 dataProvider="{contigSinDismissed.predicted_gene}" 
+								 itemDoubleClick="genesDataGrid_itemDoubleClickHandler(event)" 
+								 doubleClickEnabled="true" 
+								 toolTip="Double click on a row to see more specific information" 
+								 selectable="true">
+						<mx:columns>
+							<mx:DataGridColumn headerText="(Era7 gene ID)" 
+											   dataField="id" 
+											   width="95"
+											   sortCompareFunction="idSortCompareFunction"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+							<mx:DataGridColumn headerText="Protein name" 
+											   dataField="protein_names" 
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+							<mx:DataGridColumn headerText="Status" 
+											   dataField="status" 
+											   width="70"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+							<mx:DataGridColumn headerText="Start" 
+											   dataField="start_position"
+											   sortCompareFunction="startPositionSortCompareFunction" 
+											   width="70"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+							<mx:DataGridColumn headerText="End" 
+											   dataField="end_position" 
+											   width="70"
+											   sortCompareFunction="endPositionSortCompareFunction"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+							<mx:DataGridColumn headerText="Strand" 
+											   dataField="strand" 
+											   width="50"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+							<mx:DataGridColumn headerText="Start is canonical" 
+											   dataField="start_is_canonical" 
+											   width="105"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+							<mx:DataGridColumn headerText="End is canonical" 
+											   dataField="end_is_canonical" 
+											   width="100"
+											   itemRenderer="com.era7.util.gui.datagrid.SelectableLabel"/>
+						</mx:columns>
+					</mx:DataGrid>	
+					<!--<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="right" height="40" 
+							 paddingLeft="5" paddingRight="5" paddingTop="5" paddingBottom="5" cornerRadius="10" 
+							 backgroundColor="#ECECEC" dropShadowVisible="false">
+						<s:TextInput width="100%" enabled="true" id="fileNameGenesContigTextInput" toolTip="Name of the xml/fasta file"/>
+						<s:Button label="Export to xml file" id="exportToXmlFileContigGenesButton" click="exportToXmlFileContigGenesButton_clickHandler(event)" toolTip="Export selected genes to xml file"/>
+						<s:Button label="Export to fasta file" id="exportToFastaFileGenesContigButton" click="exportToFastaFileGenesContigButton_clickHandler(event)" toolTip="Export selected genes to fasta file"/>
+						<s:Button label="Select all" id="selectAllGenesContigButton" click="selectAllGenesContigButton_clickHandler(event)" toolTip="Select all genes"/>
+					</mx:HBox>		-->					
+				</mx:VBox>									
+			</mx:HDividedBox>
+			<mx:HDividedBox label="All genes" width="100%" height="100%" >
+				<mx:VBox width="100%" height="100%" paddingLeft="5" paddingRight="5" paddingBottom="5" paddingTop="5">
+					<s:HGroup width="100%" verticalAlign="middle">
+						<s:ComboBox id="allGenesSearchComboBox" selectedIndex="0">
+							<s:dataProvider>
+								<mx:ArrayList>
+									<fx:String>{PredictedGene.PROTEIN_NAMES_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.CONTIG_ID_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.ID_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.STATUS_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.START_POSITION_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.END_POSITION_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.STRAND_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.START_IS_CANONICAL_TAG_NAME}</fx:String>
+									<fx:String>{PredictedGene.END_IS_CANONICAL_TAG_NAME}</fx:String>
+								</mx:ArrayList>
+							</s:dataProvider>
+						</s:ComboBox>
+						<search:SearchBar width="100%" id="allGenesSearchBar"
+										  searchIcon="{searchIcon}"
+										  nextResultIcon="{nextResultIcon}"
+										  previousResultIcon="{previousResultIcon}">
+						</search:SearchBar>
+						<s:CheckBox label="Select all results" id="selectAllResultsAllGenesCheckBox" selected="false" click="selectAllResultsAllGenesCheckBox_clickHandler(event)"/>
+					</s:HGroup>						
+					<mx:DataGrid id="allGenesDataGrid" 
+								 width="100%" height="100%"
+								 dataProvider="{allGenes}" 
+								 itemDoubleClick="allGenesDataGrid_itemDoubleClickHandler(event)" 
+								 doubleClickEnabled="true"
+								 allowMultipleSelection="true" toolTip="Double click on a row to see more specific information" selectable="true">
+						<mx:columns>
+							<mx:DataGridColumn headerText="Contig ID" dataField="contig_id"
+											   width="95"/>
+							<mx:DataGridColumn headerText="(Era7 gene ID)" dataField="id" width="95"
+											   sortCompareFunction="idSortCompareFunction"/>
+							<mx:DataGridColumn headerText="Protein name" dataField="protein_names" />
+							<mx:DataGridColumn headerText="Status" dataField="status" width="70"/>
+							<mx:DataGridColumn headerText="Start" dataField="start_position"
+											   sortCompareFunction="startPositionSortCompareFunction" width="70"/>
+							<mx:DataGridColumn headerText="End" dataField="end_position" width="70"
+											   sortCompareFunction="endPositionSortCompareFunction"/>
+							<mx:DataGridColumn headerText="Strand" dataField="strand" width="50"/>
+							<mx:DataGridColumn headerText="Start is canonical" dataField="start_is_canonical" width="105"/>
+							<mx:DataGridColumn headerText="End is canonical" dataField="end_is_canonical" width="100"/>
+						</mx:columns>
+					</mx:DataGrid>
+					<!--<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="right" height="40" 
+							 paddingLeft="5" paddingRight="5" paddingTop="5" paddingBottom="5" cornerRadius="10" 
+							 backgroundColor="#ECECEC" dropShadowVisible="false">
+						<s:TextInput width="100%" enabled="true" id="fileNameAllGenesTextInput" toolTip="Name of the xml/fasta file"/>
+						<s:Button label="Export to xml file" id="exportToXmlFileAllGenesButton" 
+								  click="exportToXmlFileAllGenesButton_clickHandler(event)" toolTip="Export selected genes to xml file"/>
+						<s:Button label="Export to fasta file" id="exportToFastaFileAllGenesButton" 
+								  click="exportToFastaFileAllGenesButton_clickHandler(event)" toolTip="Export selected genes to fasta file"/>
+						<s:Button label="Select all" id="selectAllGenesButton" 
+								  click="selectAllGenesButton_clickHandler(event)" toolTip="Select all genes"/>
+					</mx:HBox>-->
+					
+				</mx:VBox>
+				
+			</mx:HDividedBox>
+			<mx:VBox label="Dismissed genes" width="100%" height="100%" paddingLeft="5" paddingRight="5" 
+					 paddingTop="5" paddingBottom="5">
+				
+				<s:HGroup width="100%" verticalAlign="middle">
+					<s:ComboBox id="dismissedGenesSearchComboBox" selectedIndex="0">
+						<s:dataProvider>
+							<mx:ArrayList>
+								<fx:String>{PredictedGene.PROTEIN_NAMES_TAG_NAME}</fx:String>
+								<fx:String>{PredictedGene.CONTIG_ID_TAG_NAME}</fx:String>
+								<fx:String>{PredictedGene.ID_TAG_NAME}</fx:String>
+								<fx:String>{PredictedGene.STATUS_TAG_NAME}</fx:String>
+								<fx:String>{PredictedGene.START_POSITION_TAG_NAME}</fx:String>
+								<fx:String>{PredictedGene.END_POSITION_TAG_NAME}</fx:String>
+								<fx:String>{PredictedGene.STRAND_TAG_NAME}</fx:String>
+								<fx:String>{PredictedGene.START_IS_CANONICAL_TAG_NAME}</fx:String>
+								<fx:String>{PredictedGene.END_IS_CANONICAL_TAG_NAME}</fx:String>
+							</mx:ArrayList>
+						</s:dataProvider>
+					</s:ComboBox>
+					<search:SearchBar width="100%" id="dismissedGenesSearchBar"
+									  searchIcon="{searchIcon}"
+									  nextResultIcon="{nextResultIcon}"
+									  previousResultIcon="{previousResultIcon}">
+					</search:SearchBar>
+					<s:CheckBox label="Select all results" id="selectAllResultsDismissedGenesCheckBox" selected="false" click="selectAllResultsDismissedGenesCheckBox_clickHandler(event)"/>
+				</s:HGroup>
+				<mx:DataGrid id="dismissedGenesDataGrid" 
+							 width="100%" height="100%"
+							 dataProvider="{dismissedGenes}" 
+							 doubleClickEnabled="true" itemDoubleClick="dismissedGenesDataGrid_itemDoubleClickHandler(event)" allowMultipleSelection="true" toolTip="Double click on a row to see more specific information" selectable="true">
+					<mx:columns>
+						<mx:DataGridColumn headerText="Contig ID" dataField="contig_id"
+										   width="95"/>
+						<mx:DataGridColumn headerText="(Era7 gene ID)" dataField="id" width="95"
+										   sortCompareFunction="idSortCompareFunction"/>
+						<mx:DataGridColumn headerText="Protein name" dataField="protein_names" />
+						<mx:DataGridColumn headerText="Status" dataField="status" width="70"/>
+						<mx:DataGridColumn headerText="Start" dataField="start_position"
+										   sortCompareFunction="startPositionSortCompareFunction" width="70"/>
+						<mx:DataGridColumn headerText="End" dataField="end_position" width="70"
+										   sortCompareFunction="endPositionSortCompareFunction"/>
+						<mx:DataGridColumn headerText="Strand" dataField="strand" width="50"/>
+						<mx:DataGridColumn headerText="Start is canonical" dataField="start_is_canonical" width="105"/>
+						<mx:DataGridColumn headerText="End is canonical" dataField="end_is_canonical" width="100"/>
+					</mx:columns>
+				</mx:DataGrid>
+				<!--<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="right" height="40" 
+						 paddingLeft="5" paddingRight="5" paddingTop="5" paddingBottom="5" cornerRadius="10" 
+						 backgroundColor="#ECECEC" dropShadowVisible="false">
+					<s:TextInput width="100%" enabled="true" id="fileNameDismissedGenesTextInput" toolTip="Name of the xml/fasta file"/>
+					<s:Button label="Export to xml file" id="exportToXmlFileDismissedGenesButton" 
+							  click="exportToXmlFileDismissedGenesButton_clickHandler(event)" toolTip="Export selected genes to xml file"/>
+					<s:Button label="Export to fasta file" id="exportToFastaFileDismissedGenesButton" 
+							  click="exportToFastaFileDismissedGenesButton_clickHandler(event)" toolTip="Export selected genes to fasta file"/>
+					<s:Button label="Select all" id="selectAllDismissedGenesButton" 
+							  click="selectAllDismissedGenesButton_clickHandler(event)" toolTip="Selected all genes"/>
+				</mx:HBox>-->
+			</mx:VBox>				
+			<mx:VDividedBox label="RNAs" width="100%" height="100%">
+				<mx:HDividedBox width="100%" height="100%">
+					<mx:DataGrid id="contigsRnaDataGrid" 
+								 height="100%" width="30%"
+								 dataProvider="{xml.predicted_rnas.contig}"  itemClick="contigsRnaDataGrid_itemClickHandler(event)" selectable="true">
+						<mx:columns>
+							<mx:DataGridColumn headerText="contig ID" dataField="id"/>
+							<mx:DataGridColumn headerText="Number of rnas" dataField="rnas_number"
+											   sortDescending="true" 
+											   sortCompareFunction="rnasNumberSortCompareFunction"
+											   width="120"/>
+						</mx:columns>
+					</mx:DataGrid>
+					<s:VGroup height="100%" width="70%">
+						<s:HGroup width="100%" verticalAlign="middle">
+							<s:ComboBox id="contigRnasSearchComboBox" selectedIndex="0">
+								<s:dataProvider>
+									<mx:ArrayList>
+										<fx:String>{PredictedRna.ANNOTATION_UNIPROT_ID_TAG_NAME}</fx:String>
+										<fx:String>{PredictedRna.ID_TAG_NAME}</fx:String>
+										<fx:String>{PredictedRna.START_POSITION_TAG_NAME}</fx:String>
+										<fx:String>{PredictedRna.END_POSITION_TAG_NAME}</fx:String>
+										<fx:String>{PredictedRna.STRAND_TAG_NAME}</fx:String>
+										<fx:String>{PredictedRna.EVALUE_TAG_NAME}</fx:String>
+									</mx:ArrayList>
+								</s:dataProvider>
+							</s:ComboBox>
+							<search:SearchBar width="100%" id="contigRnasSearchBar"
+											  searchIcon="{searchIcon}"
+											  nextResultIcon="{nextResultIcon}"
+											  previousResultIcon="{previousResultIcon}">
+							</search:SearchBar>
+							<s:CheckBox label="Select all results" id="selectAllResultsContigRnasCheckBox" selected="false" click="selectAllResultsContigRnasCheckBox_clickHandler(event)"/>
+						</s:HGroup>
+						<mx:DataGrid id="rnasDataGrid" 
+									 width="100%" height="100%"
+									 dataProvider="{contigRna.predicted_rna}" 
+									 doubleClickEnabled="true" itemDoubleClick="rnasDataGrid_itemDoubleClickHandler(event)" toolTip="Double click on a row to see more specific information" selectable="true">
+							<mx:columns>
+								<mx:DataGridColumn headerText="(Era7 rna ID)" dataField="id" width="95"/>
+								<mx:DataGridColumn headerText="Name" dataField="annotation_uniprot_id" />
+								<mx:DataGridColumn headerText="Start" dataField="start_position"
+												   sortCompareFunction="startPositionSortCompareFunction" width="70"/>
+								<mx:DataGridColumn headerText="End" dataField="end_position" width="70"
+												   sortCompareFunction="endPositionSortCompareFunction"/>
+								<mx:DataGridColumn headerText="Strand" dataField="strand" width="50"/>
+								<mx:DataGridColumn headerText="Evalue" dataField="evalue" width="110" 
+												   sortCompareFunction="evalueSortCompareFunction"/>
+							</mx:columns>
+						</mx:DataGrid>
+						<!--<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="right" height="40" 
+								 paddingLeft="5" paddingRight="5" paddingTop="5" paddingBottom="5" cornerRadius="10" 
+								 backgroundColor="#ECECEC" dropShadowVisible="false">
+							<s:TextInput width="100%" enabled="true" id="fileNameRnasContigTextInput" toolTip="Name of the xml/fasta file"/>
+							<s:Button label="Export to xml file" id="exportToXmlFileContigRnasButton" 
+									  click="exportToXmlFileContigRnasButton_clickHandler(event)" toolTip="Export selected rnas to xml file"/>
+							<s:Button label="Export to fasta file" id="exportToFastaFileRnasContigButton" 
+									  click="exportToFastaFileRnasContigButton_clickHandler(event)" toolTip="Export selected rnas to fasta file"/>
+							<s:Button label="Select all" id="selectAllRnasContigButton" click="selectAllRnasContigButton_clickHandler(event)" toolTip="Select all rnas"/>
+						</mx:HBox>-->
+						
+					</s:VGroup>										
+				</mx:HDividedBox>
+			</mx:VDividedBox>				
+		</mx:TabNavigator>
+	</mx:VBox>		
+	<mx:SWFLoader height="104"					  
+				  source="@Embed('../assets/imagenes_web_Era7_Bioinformatics_definitivas/header_2010.jpg')" 
+				  scaleContent="false" useHandCursor="true" buttonMode="true" mouseChildren="false"
+				  click="onHeaderClick()" 
+				  top="15" 
+				  left="15" 
+				  right="15" includeIn="LoadingState"/>
+	<s:HGroup  
+			  verticalAlign="middle" 
+			  paddingTop="0" 
+			  paddingBottom="0" 
+			  paddingRight="0" 
+			  paddingLeft="0" 
+			  left="15" 
+			  top="15" 
+			  right="15" 
+			  height="80">
+		<mx:Canvas 
+				   cornerRadius="15" 
+				   backgroundColor="#FFFFFF" 
+				   height="100%" width="242">
+					<mx:SWFLoader id="era7Logo"
+						  source="{BG7IconsManager.era7Icon}"
+						  buttonMode="true"
+						  mouseChildren="false"
+						  useHandCursor="true" 
+						  scaleContent="true" 
+						  left="0" 
+						  top="10"
+						  click="era7Logo_clickHandler(event)"/>
+		</mx:Canvas>
+		
+		<mx:Canvas width="100%" 
+				   cornerRadius="15" 
+				   backgroundColor="#52A2D2" 
+				   height="100%">
+			<mx:SWFLoader id="bg7Logo"
+				source="{BG7IconsManager.bg7Icon}"
+				right="10" 
+				verticalCenter="0" 
+				height.LoadingState="60"/>			
+		</mx:Canvas>
+	</s:HGroup>
+</s:Application>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="400" height="300" title="Extra stop codons" close="titlewindow1_closeHandler(event)">
+	<s:layout>
+		<s:VerticalLayout paddingLeft="10" paddingRight="10" paddingTop="10" paddingBottom="10"/>
+	</s:layout>
+	<s:Label text="Positions" fontWeight="bold"/>
+	<mx:DataGrid width="100%" height="100%" id="dataGrid" dataProvider="{xml.codon}">
+		<mx:columns>
+			<mx:DataGridColumn headerText="Position" dataField="position"/>
+		</mx:columns>
+	</mx:DataGrid>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.events.CloseEvent;
+			
+			[Bindable]
+			public var xml:XML = null;
+
+			protected function titlewindow1_closeHandler(event:CloseEvent):void
+			{
+				visible = false;
+			}
+
+		]]>
+	</fx:Script>
+</s:TitleWindow>

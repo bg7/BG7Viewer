@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="600" height="284" 
+			   close="titlewindow1_closeHandler(event)" headerHeight="15"
+			   paddingLeft="10" paddingRight="10" paddingTop="10" paddingBottom="10"
+			   layout="vertical" showCloseButton="true">
+	<fx:Script>
+		<![CDATA[
+			import com.era7.bioinfo.xml.annotation.PredictedRna;
+			
+			import mx.events.CloseEvent;
+			
+			[Bindable]
+			protected var rna:PredictedRna = null;
+			
+			public function setRna(value:PredictedRna):void{
+				rna = value;
+			}
+
+			protected function titlewindow1_closeHandler(event:CloseEvent):void
+			{
+				visible = false;
+			}
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Label text="Era7 rna ID:" fontWeight="bold"/>
+		<mx:Label id="idLabel" text="{rna.id}" selectable="true"/>
+	</s:HGroup>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Label text="Start:" fontWeight="bold"/>
+		<mx:Label id="startLabel" text="{rna.startPosition}" selectable="true"/>
+		<s:Label text="End:" fontWeight="bold"/>
+		<mx:Label text="{rna.endPosition}" id="endLabel" selectable="true"/>
+	</s:HGroup>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Label text="Strand:" fontWeight="bold"/>
+		<mx:Label text="{rna.strand}" selectable="true"/>
+		<s:Label text="Length:" fontWeight="bold"/>
+		<mx:Label text="{rna.length}" id="lengthLabel" selectable="true"/>
+	</s:HGroup>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Label text="Evalue:" fontWeight="bold"/>
+		<mx:Label text="{rna.evalue}" id="evalueLabel" selectable="true"/>
+		<s:Label text="Hit def:" fontWeight="bold"/>
+		<mx:Label id="hitDefLabel" text="{rna.hitDef}" selectable="true"/>
+	</s:HGroup>
+	<s:Label text="Annotation:" fontWeight="bold"/>
+	<s:TextArea width="100%" editable="false" height="40" id="annotationUniprotIdTextArea" text="{rna.annotationUniprotId}"/>
+	<s:Label text="Sequence:" fontWeight="bold"/>
+	<s:TextArea width="100%" editable="false" height="40" id="sequenceTextArea" text="{rna.sequence}"/>
+</mx:TitleWindow>
